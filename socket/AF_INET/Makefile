@@ -5,4 +5,4 @@ default:
 	gcc client.c -o client.out -lpthread
 
 clean:
-	rm -f server.out
+	rm -f server.out client.out
