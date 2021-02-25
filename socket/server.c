@@ -10,14 +10,33 @@
 #include <arpa/inet.h>
 #include <signal.h>  //need ignore socket signal
 
+/*********************
+ *      DEFINES
+ *********************/
 #define MY_IP    "127.0.0.1"
 #define MY_PORT  5678
 #define BACKLOG  100
 
 #define MAXLINE  4096
 
-static void *client_cb(void *arg);
+#define MAX_CLIENTS 5
 
+/**********************
+ *  STATIC VARIABLES
+ **********************/
+static int s_client_table[MAX_CLIENTS];
+static pthread_mutex_t client_table_mutex;
+/**********************
+ *  STATIC PROTOTYPES
+ **********************/
+static void *client_cb(void *arg);
+static void client_table_init(void);
+static void client_table_add(int fd);
+static void client_table_del(int fd);
+
+/**********************
+ *   GLOBAL FUNCTIONS
+ **********************/
 int main(void)
 {
     struct sockaddr_in server_addr;
@@ -28,6 +47,8 @@ int main(void)
 
     int ret = -1;
     pthread_t tid = -1;
+
+    client_table_init();
 
     signal(SIGPIPE, SIG_IGN); //ignore pipe broken.
     sock_fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -67,25 +88,79 @@ int main(void)
             printf("pthread_create error\n");
             return -1;
         }
+        client_table_add(client_fd);
+
     }
     close(sock_fd);
     return 0;
 }
 
+/**********************
+ *   STATIC FUNCTIONS
+ **********************/
 static void *client_cb(void *arg)
 {
     char recv_buf[MAXLINE];
+    char send_buf[MAXLINE]; // should + several bites.
     int *p_client_fd = arg;
     int client_fd = *p_client_fd;
     int ret = 1;
-    memset(recv_buf,0,sizeof(recv_buf));
+    int i;
     while(1) {
+        memset(recv_buf,0,sizeof(recv_buf));
         ret = recv(client_fd, recv_buf, sizeof(recv_buf), 0);
-        if(0 == ret) break;//return 0 means the pipe is broken.
-        printf("client-%d: %s\n", client_fd, recv_buf); 
-        //send(client_fd,&recv_buf,sizeof(recv_buf),0);
-        //memset(recv_buf,0,sizeof(recv_buf));        
+        if(0 == ret) {
+            break;//return 0 means the pipe is broken.
+        }
+        printf("client-%d: %s\n", client_fd, recv_buf);
+        memset(send_buf,0,sizeof(send_buf));
+        sprintf(send_buf, "client-%d: %s", client_fd, recv_buf);
+        for(i=0;i<MAX_CLIENTS;i++) {
+            if(s_client_table[i] != 0) {
+                send(s_client_table[i], &send_buf, sizeof(send_buf), 0);
+            }
+        }
     }
     printf("client-%d over\n", client_fd);
     close(client_fd);
+    client_table_del(client_fd);
+    memset(send_buf,0,sizeof(send_buf));
+    sprintf(send_buf, "<client-%d left the room>", client_fd);
+    for(i=0;i<MAX_CLIENTS;i++) {
+        if(s_client_table[i] != 0) {
+            send(s_client_table[i], &send_buf, sizeof(send_buf), 0);
+        }
+    }
+}
+
+
+/*poor, just for demo.*/
+static void client_table_init(void)
+{
+    memset(s_client_table, 0, sizeof(s_client_table));
+    pthread_mutex_init(&client_table_mutex, NULL);
+}
+static void client_table_add(int fd)
+{
+    int i;
+    pthread_mutex_lock(&client_table_mutex);
+    for(i=0;i<MAX_CLIENTS;i++) {
+        if(s_client_table[i] == 0) {
+            s_client_table[i] = fd;
+            break;
+        }
+    }
+    pthread_mutex_unlock(&client_table_mutex);
+}
+static void client_table_del(int fd)
+{
+    int i;
+    pthread_mutex_lock(&client_table_mutex);
+    for(i=0;i<MAX_CLIENTS;i++) {
+        if(s_client_table[i] == fd) {
+            s_client_table[i] = 0;
+            break;
+        }
+    }
+    pthread_mutex_unlock(&client_table_mutex);
 }

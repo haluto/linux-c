@@ -5,17 +5,22 @@
 #include<sys/types.h>
 #include<sys/socket.h>
 #include<netinet/in.h>
+#include <pthread.h>
 
 #define MY_IP    "127.0.0.1"
 #define MY_PORT  5678
 
 #define MAXLINE  4096
 
+static void *get_server_msg_cb(void *arg);
+
 int main(void)
 {
     int sockfd;
     char recvline[MAXLINE], sendline[MAXLINE];
     struct sockaddr_in servaddr;
+    int ret = -1;
+    pthread_t tid = -1;
 
     if((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
         printf("create socket error: %s(errno: %d)\n", strerror(errno),errno);
@@ -35,6 +40,12 @@ int main(void)
         exit(0);
     }
 
+    ret = pthread_create(&tid, NULL, &get_server_msg_cb, &sockfd);
+    if(ret != 0) {
+        printf("pthread_create error\n");
+        exit(0);
+    }
+
     while(1) {
         printf("send msg to server: \n");
         fgets(sendline, MAXLINE, stdin);
@@ -50,4 +61,22 @@ int main(void)
 
     close(sockfd);
     exit(0);
+}
+
+
+static void *get_server_msg_cb(void *arg)
+{
+    int ret = 1;
+    char recv_buf[MAXLINE];
+    int *p_sockfd = arg;
+    int sockfd = *p_sockfd;
+    while(1) {
+        memset(recv_buf,0,sizeof(recv_buf));
+        ret = recv(sockfd, recv_buf, sizeof(recv_buf), 0);
+        if(0 == ret) {
+            printf("server is down\n");
+            break;
+        }
+        printf("server said: %s\n", recv_buf);
+    }
 }
