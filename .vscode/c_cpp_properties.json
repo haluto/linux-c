@@ -1,0 +1,17 @@
+{
+    "configurations": [
+        {
+            "name": "Linux",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "/usr/include/"
+            ],
+            "defines": [],
+            "compilerPath": "/home/android/Qualcomm/LLVM/Snapdragon-llvm-3.5.2.4-compiler-linux64/bin/clang",
+            "cStandard": "c99",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "clang-arm"
+        }
+    ],
+    "version": 4
+}
