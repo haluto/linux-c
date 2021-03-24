@@ -41,3 +41,11 @@ A simple demo about how to use (AF_UNIX, SOCK_DGRAM)
 A simple demo about multi-clients using (AF_UNIX, SOCK_DGRAM).
 
 Try to make it works like qcom mcm service.
+
+# shared_memory
+
+## mmap
+
+Run *writer*, and then run *reader* (could be muitiple opened).
+
+Enter text within *writer*, *reader*(s) will print the memory info. Once enter "exit" as text, *reader*(s) stop and then *writer* stops.
