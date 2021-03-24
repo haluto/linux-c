@@ -20,7 +20,7 @@ int main() {
 
   /* get a pointer to memory */
   caddr_t memptr = mmap(NULL,       /* let system pick where to put segment */
-                        ByteSize,   /* how many bytes */
+                        BUFFER_SIZE,   /* how many bytes */
                         PROT_READ | PROT_WRITE, /* access protections */
                         MAP_SHARED, /* mapping visible to other processes */
                         fd,         /* file descriptor */
@@ -42,14 +42,12 @@ int main() {
     printf("waiting semaphore...\n");
     if (!sem_wait(semptr)) { /* wait until semaphore != 0 */
       printf("Waiting DONE.\n");
-      int i;
-      for (i = 0; i < strlen(memptr); i++)
-        write(STDOUT_FILENO, memptr + i, 1); /* one byte at a time */
+      printf("%s\n", memptr);
 
       sem_post(semptr);
       if(strncmp(memptr, "exit", strlen("exit")) == 0) {
         /* cleanup */
-        munmap(memptr, ByteSize);
+        munmap(memptr, BUFFER_SIZE);
         close(fd);
         //sem_unlink(SemaphoreName);
         sem_close(semptr);

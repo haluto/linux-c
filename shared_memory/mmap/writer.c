@@ -40,17 +40,17 @@ int main() {
                     AccessPerms);     /* access permissions (0644) */
   if (fd < 0) report_and_exit("Can't open shared mem segment...");
 
-  ftruncate(fd, ByteSize); /* get the bytes */
+  ftruncate(fd, BUFFER_SIZE); /* get the bytes */
 
   caddr_t memptr = mmap(NULL,       /* let system pick where to put segment */
-                        ByteSize,   /* how many bytes */
+                        BUFFER_SIZE,   /* how many bytes */
                         PROT_READ | PROT_WRITE, /* access protections */
                         MAP_SHARED, /* mapping visible to other processes */
                         fd,         /* file descriptor */
                         0);         /* offset: start at 1st byte */
   if ((caddr_t) -1  == memptr) report_and_exit("Can't get segment...");
 
-  fprintf(stderr, "shared mem address: %p [0..%d]\n", memptr, ByteSize - 1);
+  fprintf(stderr, "shared mem address: %p [0..%d]\n", memptr, BUFFER_SIZE - 1);
   fprintf(stderr, "backing file:       /dev/shm/%s\n", BackingFile );
 
   /* semaphore code to lock the shared mem */
@@ -60,7 +60,7 @@ int main() {
                            0);            /* initial value */
   if (semptr == (void*) -1) report_and_exit("sem_open");
 
-  strcpy(memptr, MemContents); /* copy some ASCII bytes to the segment */
+  strcpy(memptr, "InitialString"); /* copy some ASCII bytes to the segment */
 
   /* increment the semaphore so that memreader can read */
   if (sem_post(semptr) < 0) report_and_exit("sem_post");
@@ -80,23 +80,29 @@ int main() {
   return 0;
 }
 
+static void write_to_shm(char *buffer)
+{
+  if (!sem_wait(s_obj.semptr)) { /* wait until semaphore != 0 */
+    memcpy(s_obj.memptr, buffer, BUFFER_SIZE);
+    if (sem_post(s_obj.semptr) < 0) report_and_exit("sem_post");
+
+    if(strncmp(buffer, "exit", strlen("exit")) == 0) {
+      printf("checking readers to exit...\n");
+      sleep(2);//waiting the reader stopped.
+      clean_up();
+      exit(0);
+    }
+  }
+}
+
 static void *update_shm_main(void *p)
 {
-  char buffer[ByteSize] = {0};
+  char buffer[BUFFER_SIZE] = {0};
   while(1) {
     printf("Enter data: ");
     memset(buffer, 0, sizeof(buffer));
-    fgets(buffer, ByteSize, stdin);
-    if (!sem_wait(s_obj.semptr)) { /* wait until semaphore != 0 */
-      memcpy(s_obj.memptr, buffer, ByteSize);
-      if (sem_post(s_obj.semptr) < 0) report_and_exit("sem_post");
-
-      if(strncmp(buffer, "exit", strlen("exit")) == 0) {
-        sleep(2);//waiting the reader stopped.
-        clean_up();
-        exit(0);
-      }
-    }
+    fgets(buffer, BUFFER_SIZE, stdin);
+    write_to_shm(buffer);
   }
 }
 
@@ -105,7 +111,7 @@ static void clean_up(void)
 {
   /* clean up */
   printf("cleaning up...\n");
-  munmap(s_obj.memptr, ByteSize); /* unmap the storage */
+  munmap(s_obj.memptr, BUFFER_SIZE); /* unmap the storage */
   close(s_obj.fd);
   sem_unlink(SemaphoreName);
   sem_close(s_obj.semptr);
@@ -130,6 +136,5 @@ static void sigcb(int signo)
     break;
   }
 
-  clean_up();
-  exit(0);
+  write_to_shm("exit");
 }

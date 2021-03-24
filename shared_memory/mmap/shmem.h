@@ -1,7 +1,5 @@
 const char * BackingFile = "shMemEx";
-#define ByteSize 512
+#define BUFFER_SIZE 512
 #define AccessPerms 0644
 
-const char * SemaphoreName = "system-display-semaphonre";
-
-char *MemContents = "hello there.";
+const char * SemaphoreName = "shMemEx-semaphonre";
