@@ -8,10 +8,12 @@
 #include <semaphore.h>
 #include <string.h>
 #include <pthread.h>
+#include <signal.h>
 #include "shmem.h"
 
-static void update_shm_main(void);
+static void *update_shm_main(void * p);
 static void clean_up(void);
+static void sigcb(int signo);
 
 typedef struct {
   int fd;
@@ -27,6 +29,12 @@ void report_and_exit(const char* msg) {
 }
 
 int main() {
+  memset(&s_obj, 0, sizeof(s_obj));
+  signal(SIGHUP, sigcb);
+  signal(SIGINT, sigcb);
+  signal(SIGQUIT, sigcb);
+  signal(SIGTERM, sigcb);
+
   int fd = shm_open(BackingFile,      /* name from smem.h */
                     O_RDWR | O_CREAT, /* read/write, create if needed */
                     AccessPerms);     /* access permissions (0644) */
@@ -58,7 +66,7 @@ int main() {
   if (sem_post(semptr) < 0) report_and_exit("sem_post");
 
   pthread_t tid = 0;
-  pthread_create(&tid, NULL, update_shm_main, NULL);
+  pthread_create(&tid, NULL, &update_shm_main, NULL);
 
   s_obj.fd = fd;
   s_obj.memptr = memptr;
@@ -72,7 +80,7 @@ int main() {
   return 0;
 }
 
-static void update_shm_main(void)
+static void *update_shm_main(void *p)
 {
   char buffer[ByteSize] = {0};
   while(1) {
@@ -95,10 +103,33 @@ static void update_shm_main(void)
 
 static void clean_up(void)
 {
-    /* clean up */
+  /* clean up */
+  printf("cleaning up...\n");
   munmap(s_obj.memptr, ByteSize); /* unmap the storage */
   close(s_obj.fd);
   sem_unlink(SemaphoreName);
   sem_close(s_obj.semptr);
   shm_unlink(BackingFile); /* unlink from the backing file */
+}
+
+
+static void sigcb(int signo)
+{
+  switch (signo) {
+  case SIGHUP:
+    printf("Get a signal -- SIGHUP\n");
+    break;
+  case SIGINT:
+    printf("Get a signal -- SIGINT\n");
+    break;
+  case SIGQUIT:
+    printf("Get a signal -- SIGQUIT\n");
+    break;
+  case SIGTERM:
+    printf("Get a signal -- SIGTERM\n");
+    break;
+  }
+
+  clean_up();
+  exit(0);
 }
